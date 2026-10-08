@@ -1,9 +1,11 @@
 package org.example.flashsale.api;
 
-import org.example.flashsale.api.dto.DtoMapper;
-import org.example.flashsale.api.dto.FlashSaleDto;
+import jakarta.validation.Valid;
+import org.example.flashsale.api.dto.*;
 import org.example.flashsale.model.FlashSale;
+import org.example.flashsale.model.Order;
 import org.example.flashsale.service.FlashSaleService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,7 +29,24 @@ public class FlashSaleController {
 
     @GetMapping("/{id}")
     public FlashSaleDto getById(@PathVariable long id) {
-        FlashSale sale = flashSaleService.getSale(id);
-        return DtoMapper.toDto(sale);
+        return DtoMapper.toDto(flashSaleService.getSale(id));
+    }
+
+    @PostMapping("/{id}/reserve")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReserveResponse reserve(@PathVariable long id,
+                                   @Valid @RequestBody ReserveRequest request) {
+        Order order = flashSaleService.reserve(request.userId(), id, request.quantity());
+        FlashSale after = flashSaleService.getSale(id);
+
+        return new ReserveResponse(
+                order.getId(),
+                order.getUserId(),
+                order.getFlashSaleId(),
+                order.getQuantity(),
+                order.getTotalPrice(),
+                after.getRemainingStock(),
+                order.getCreatedAt()
+        );
     }
 }

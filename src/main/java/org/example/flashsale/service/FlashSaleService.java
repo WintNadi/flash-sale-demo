@@ -9,11 +9,13 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class FlashSaleService {
 
     private final FlashSaleRepository saleRepo;
+    private final AtomicLong orderIdGenerator = new AtomicLong(1);
 
     public FlashSaleService(FlashSaleRepository saleRepo) {
         this.saleRepo = saleRepo;
@@ -29,8 +31,8 @@ public class FlashSaleService {
     }
 
     /**
-     * Reserves stock using the atomic SQL UPDATE.
-     * Thread-safe — no synchronized block needed.
+     * Reserve stock for a user.
+     * Order persistence is a placeholder (in-memory ID) until Phase 5.
      */
     public Order reserve(long userId, long flashSaleId, int quantity) {
         FlashSale sale = getSale(flashSaleId);
@@ -48,8 +50,8 @@ public class FlashSaleService {
             throw new SoldOutException("Not enough stock");
         }
 
-        // Placeholder — order persistence comes in a later session
-        return new Order(0L, userId, flashSaleId, quantity,
+        long orderId = orderIdGenerator.getAndIncrement();
+        return new Order(orderId, userId, flashSaleId, quantity,
                 quantity * sale.getSalePrice(), now);
     }
 }

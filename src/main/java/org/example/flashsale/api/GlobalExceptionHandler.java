@@ -4,11 +4,13 @@ import org.example.flashsale.api.dto.ErrorResponse;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,6 +31,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleNotActive(SaleNotActiveException e) {
         return new ErrorResponse("SALE_NOT_ACTIVE", e.getMessage(), LocalDateTime.now());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleValidation(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(err -> err.getField() + ": " + err.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return new ErrorResponse("VALIDATION_ERROR", message, LocalDateTime.now());
     }
 
     @ExceptionHandler(Exception.class)
