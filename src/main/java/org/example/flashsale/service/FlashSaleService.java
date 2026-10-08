@@ -2,28 +2,35 @@ package org.example.flashsale.service;
 
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
-import org.example.flashsale.model.*;
+import org.example.flashsale.model.FlashSale;
+import org.example.flashsale.model.Order;
 import org.example.flashsale.repository.FlashSaleRepository;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
+import java.util.List;
 
+@Service
 public class FlashSaleService {
 
-    private final FlashSaleRepository saleRepo = new FlashSaleRepository();
+    private final FlashSaleRepository saleRepo;
+
+    public FlashSaleService(FlashSaleRepository saleRepo) {
+        this.saleRepo = saleRepo;
+    }
 
     public FlashSale getSale(long id) {
         return saleRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Sale not found: " + id));
     }
 
-    public Collection<FlashSale> getAllSales() {
+    public List<FlashSale> getAllSales() {
         return saleRepo.findAll();
     }
 
     /**
-     * Reserves stock using an atomic SQL UPDATE.
-     * No synchronized block needed — the DB handles concurrency.
+     * Reserves stock using the atomic SQL UPDATE.
+     * Thread-safe — no synchronized block needed.
      */
     public Order reserve(long userId, long flashSaleId, int quantity) {
         FlashSale sale = getSale(flashSaleId);
@@ -36,13 +43,12 @@ public class FlashSaleService {
             throw new SaleNotActiveException("Sale has ended");
         }
 
-        // ⭐ Atomic reservation — the DB does the locking
         boolean reserved = saleRepo.tryReserve(flashSaleId, quantity);
         if (!reserved) {
             throw new SoldOutException("Not enough stock");
         }
 
-        // Placeholder order — we'll write to DB in the next step
+        // Placeholder — order persistence comes in a later session
         return new Order(0L, userId, flashSaleId, quantity,
                 quantity * sale.getSalePrice(), now);
     }

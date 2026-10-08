@@ -1,7 +1,9 @@
 package org.example.flashsale.repository;
 
 import org.example.flashsale.model.FlashSale;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.*;
@@ -9,27 +11,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@SpringBootTest
 class FlashSaleRepositoryTest {
 
-    static FlashSaleRepository saleRepo;
-    static ProductRepository productRepo;
-    static long productId;
-
-    @BeforeAll
-    static void setup() {
-        saleRepo = new FlashSaleRepository();
-        productRepo = new ProductRepository();
-        productId = productRepo.insert("Pixel 9 Test", 799.0);
-    }
-
-    @AfterAll
-    static void cleanup() {
-        Database.shutdown();
-    }
+    @Autowired FlashSaleRepository saleRepo;
+    @Autowired ProductRepository productRepo;
 
     @Test
     void onlyOneUserCanBuyTheLastItem_onRealDatabase() throws InterruptedException {
-        // Setup: sale with stock = 1
+        long productId = productRepo.insert("Pixel 9 Test", 799.0);
         long saleId = saleRepo.insert(productId, 1, 499.0,
                 LocalDateTime.now().minusMinutes(1),
                 LocalDateTime.now().plusHours(1));
@@ -45,8 +35,7 @@ class FlashSaleRepositoryTest {
             pool.submit(() -> {
                 try {
                     startGate.await();
-                    boolean reserved = saleRepo.tryReserve(saleId, 1);
-                    if (reserved) successes.incrementAndGet();
+                    if (saleRepo.tryReserve(saleId, 1)) successes.incrementAndGet();
                     else failures.incrementAndGet();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -56,24 +45,22 @@ class FlashSaleRepositoryTest {
             });
         }
 
-        startGate.countDown();   // 🔫 fire all 100 at once
-        boolean finished = doneGate.await(30, TimeUnit.SECONDS);
+        startGate.countDown();
+        doneGate.await(30, TimeUnit.SECONDS);
         pool.shutdown();
-
-        assertTrue(finished, "Test timed out");
 
         FlashSale after = saleRepo.findById(saleId).orElseThrow();
 
-        assertEquals(1, successes.get(), "Exactly ONE user should win");
-        assertEquals(99, failures.get(), "99 should be sold out");
-        assertEquals(0, after.getRemainingStock(), "Stock must be 0, never negative");
+        assertEquals(1, successes.get());
+        assertEquals(99, failures.get());
+        assertEquals(0, after.getRemainingStock());
 
-        // Cleanup
         saleRepo.deleteById(saleId);
     }
 
     @Test
     void exactly100UsersGet100Items_onRealDatabase() throws InterruptedException {
+        long productId = productRepo.insert("Pixel 9 Test 2", 799.0);
         long saleId = saleRepo.insert(productId, 100, 499.0,
                 LocalDateTime.now().minusMinutes(1),
                 LocalDateTime.now().plusHours(1));
@@ -102,8 +89,8 @@ class FlashSaleRepositoryTest {
 
         FlashSale after = saleRepo.findById(saleId).orElseThrow();
 
-        assertEquals(100, successes.get(), "Exactly 100 wins");
-        assertEquals(0, after.getRemainingStock(), "Stock must be exactly 0");
+        assertEquals(100, successes.get());
+        assertEquals(0, after.getRemainingStock());
 
         saleRepo.deleteById(saleId);
     }
