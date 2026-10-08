@@ -39,7 +39,7 @@ public class FlashSale {
 
     // ⚠️ IMPORTANT: this method is called from multiple threads
     // It must be thread-safe!
-    public boolean tryReserve(int quantity) {
+    /*public boolean tryReserve(int quantity) {
         if (remainingStock >= quantity) {
             remainingStock -= quantity;
             if (remainingStock == 0) {
@@ -48,7 +48,7 @@ public class FlashSale {
             return true;
         }
         return false;
-    }
+    }*/
 
     public void release(int quantity) {
         remainingStock += quantity;
@@ -61,5 +61,9 @@ public class FlashSale {
     public String toString() {
         return "FlashSale#" + id + " [" + product.getName() + "] stock="
                 + remainingStock + "/" + totalStock + " $" + salePrice + " " + status;
+    }
+
+    public void setRemainingStockFromDb(int stock) {
+        this.remainingStock = stock;
     }
 }

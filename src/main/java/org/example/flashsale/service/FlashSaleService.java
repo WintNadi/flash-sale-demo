@@ -3,69 +3,47 @@ package org.example.flashsale.service;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
 import org.example.flashsale.model.*;
+import org.example.flashsale.repository.FlashSaleRepository;
+
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Collection;
 
 public class FlashSaleService {
 
-    private final Map<Long, FlashSale> sales = new ConcurrentHashMap<>();
-    private final Map<Long, Order> orders = new ConcurrentHashMap<>();
-    private final AtomicLong orderIdGen = new AtomicLong(1);
+    private final FlashSaleRepository saleRepo = new FlashSaleRepository();
 
-    public void addSale(FlashSale sale) {
-        sales.put(sale.getId(), sale);
-    }
-
-    public FlashSale getSale(Long id) {
-        return sales.get(id);
+    public FlashSale getSale(long id) {
+        return saleRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sale not found: " + id));
     }
 
     public Collection<FlashSale> getAllSales() {
-        return sales.values();
-    }
-
-    public Collection<Order> getAllOrders() {
-        return orders.values();
+        return saleRepo.findAll();
     }
 
     /**
-     * Try to reserve `quantity` items from a flash sale for a user.
-     * Throws SoldOutException if not enough stock.
+     * Reserves stock using an atomic SQL UPDATE.
+     * No synchronized block needed — the DB handles concurrency.
      */
-    public Order reserve(Long userId, Long flashSaleId, int quantity) {
-        FlashSale sale = sales.get(flashSaleId);
-        if (sale == null) {
-            throw new IllegalArgumentException("Sale not found: " + flashSaleId);
-        }
+    public Order reserve(long userId, long flashSaleId, int quantity) {
+        FlashSale sale = getSale(flashSaleId);
 
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(sale.getStartsAt())) {
-            throw new SaleNotActiveException("Sale hasn't started yet");
+            throw new SaleNotActiveException("Sale hasn't started");
         }
         if (now.isAfter(sale.getEndsAt())) {
             throw new SaleNotActiveException("Sale has ended");
         }
 
-        // ⚠️ The critical section — must be thread-safe!
-        synchronized (sale) {
-            if (!sale.tryReserve(quantity)) {
-                throw new SoldOutException(
-                        "Not enough stock. Requested: " + quantity
-                                + ", available: " + sale.getRemainingStock());
-            }
+        // ⭐ Atomic reservation — the DB does the locking
+        boolean reserved = saleRepo.tryReserve(flashSaleId, quantity);
+        if (!reserved) {
+            throw new SoldOutException("Not enough stock");
         }
 
-        Order order = new Order(
-                orderIdGen.getAndIncrement(),
-                userId,
-                flashSaleId,
-                quantity,
-                quantity * sale.getSalePrice(),
-                now
-        );
-        orders.put(order.getId(), order);
-        return order;
+        // Placeholder order — we'll write to DB in the next step
+        return new Order(0L, userId, flashSaleId, quantity,
+                quantity * sale.getSalePrice(), now);
     }
 }
