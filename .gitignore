@@ -5,6 +5,7 @@ target/
 .kotlin
 
 ### IntelliJ IDEA ###
+.idea/
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
@@ -37,3 +38,12 @@ build/
 
 ### Mac OS ###
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
