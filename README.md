@@ -1,295 +1,412 @@
-# ⚡ Flash Sale System
+# FlashSale
 
-A Java Spring Boot backend demonstrating **correct concurrency handling** for high-traffic flash sales, where many users compete for limited stock at the same time.
+A **fair, concurrency-safe marketplace for limited drops**.
 
-The main goal of this project is to prevent **overselling** by handling stock updates atomically at the database level. :contentReference[oaicite:1]{index=1}
+Sellers launch flash sales with limited stock. Buyers compete to reserve items when the sale goes live. The system prevents overselling—even under 500 simultaneous requests—using atomic database updates, database constraints, and Redis TTL reservations. If a buyer doesn't pay within 10 minutes, the stock is automatically released.
 
----
-
-## 🎯 What This Project Demonstrates
-
-- **Concurrency handling** — prevents overselling under concurrent requests
-- **Database-level atomicity** — uses atomic SQL stock updates
-- **Defense in depth** — SQL conditions and database constraints
-- **Layered architecture** — API, service, repository, and model layers
-- **Spring Boot REST API**
-- **Automated concurrency testing** with JUnit 5
-- **PostgreSQL database integration**
-
-The project demonstrates why application-level locking such as `synchronized` is not sufficient for a multi-server application, while database-level atomic operations can provide shared protection. :contentReference[oaicite:2]{index=2}
+> **Live demo:** Coming soon  
+> **API base URL:** Coming soon
 
 ---
 
-## 🧠 The Core Problem
+## Documentation
 
-A naive implementation might check the stock and then decrease it:
+- [Design Document](docs/design.md) — Product definition, functional and non-functional requirements, and architecture decisions
+- [Database Schema](docs/schema.sql) — Database tables and constraints
+- [API Tests](src/test/auth.http) — HTTP test scripts
 
-```java
-if (stock > 0) {
-    stock = stock - 1;
+---
+
+## Why This Project Is Interesting
+
+Every flash sale application faces the same challenge:
+
+> *When 100 users click “Buy” at the exact same second, only the available number of buyers should succeed.*
+
+Naive implementations can oversell. This project addresses the problem using three layers of protection:
+
+1. **Atomic SQL update** — Decreases stock only when sufficient stock remains.
+2. **Database CHECK constraint** — Prevents stock from becoming negative.
+3. **Redis TTL reservations** — Automatically expires unconfirmed reservations.
+
+Concurrency tests verify the stock limits under simultaneous requests.
+
+---
+
+## Features
+
+### Buyer
+- Register and log in using JWT authentication
+- Browse upcoming, active, and ended flash sales
+- Reserve stock based on availability and per-user limits
+- Get a 10-minute reservation window
+- Complete payments through Stripe in test mode
+- View personal order history
+- Cancel reservations and release stock
+
+### Seller
+- Register as a seller
+- Create and manage products
+- Schedule flash sales with limited stock
+- View a sales dashboard
+
+### Admin
+- Moderate users, products, and flash sales
+- View platform-wide statistics
+
+### System
+- Atomic stock reservation to prevent overselling
+- Redis TTL reservations with a background sweeper
+- Email reminder two minutes before reservation expiry
+- Health check for database and Redis status
+
+---
+
+## Architecture
+
+```text
+┌───────────────────────────────────────────────┐
+│  Client — React SPA (browser)                 │
+└───────────────────────┬───────────────────────┘
+                        │ HTTPS + JSON + JWT
+                        ▼
+┌───────────────────────────────────────────────┐
+│  Spring Boot Monolith                         │
+│                                               │
+│  Presentation Layer   — Controllers + DTOs    │
+│  Business Layer       — Services              │
+│  Persistence Layer    — JdbcTemplate Repos    │
+│  Cross-cutting        — Security, Config      │
+└────────┬──────────────────────────────┬───────┘
+         ▼                              ▼
+   ┌──────────────┐              ┌──────────────┐
+   │ PostgreSQL   │              │ Redis        │
+   │ Durable data │              │ Temporary    │
+   └──────────────┘              └──────────────┘
+```
+
+**Architecture style:** Client–Server with Layered Architecture.
+
+This design keeps the application simple and testable while allowing it to evolve as the project grows. See the [design document](docs/design.md) for more details.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Java 22 |
+| Build Tool | Maven |
+| Framework | Spring Boot 3.3.4 |
+| Security | Spring Security 6, JJWT 0.12 |
+| Database | PostgreSQL 18 |
+| Cache and TTL | Redis 7 |
+| Database Access | JdbcTemplate, HikariCP |
+| Payments | Stripe (test mode) |
+| Email | SendGrid / Mailtrap |
+| Frontend | React, Vite, Tailwind CSS |
+| Testing | JUnit 5, Spring Test |
+| Deployment | Docker, Render, Vercel |
+| CI/CD | GitHub Actions |
+
+---
+
+## API Endpoints
+
+| Method | Path | Authentication | Description |
+|---|---|---|---|
+| GET | `/api/health` | Public | Check database and Redis status |
+| POST | `/api/auth/register` | Public | Register an account |
+| POST | `/api/auth/login` | Public | Log in and receive a JWT |
+| GET | `/api/auth/me` | JWT | Get the current user |
+| GET | `/api/flash-sales` | Public | List flash sales |
+| GET | `/api/flash-sales/{id}` | Public | View sale details |
+| GET | `/api/flash-sales/reservations/{orderId}` | Public | Inspect a reservation |
+| POST | `/api/flash-sales/{id}/reserve` | JWT | Reserve stock |
+| POST | `/api/orders/{id}/confirm` | JWT | Confirm an order |
+| POST | `/api/orders/{id}/cancel` | JWT | Cancel a reservation |
+| GET | `/api/orders/me` | JWT | View personal order history |
+
+### Example: Reserve Stock
+
+**Request**
+
+```http
+POST /api/flash-sales/10/reserve
+Authorization: Bearer <JWT>
+Content-Type: application/json
+
+{
+  "quantity": 1
 }
 ```
 
-When many users make requests simultaneously, multiple threads can read the same stock value before it is updated, causing **overselling**. :contentReference[oaicite:3]{index=3}
+**Response — `201 Created`**
 
-### ✅ Solution
-
-The project uses an atomic SQL operation:
-
-```sql
-UPDATE flash_sales
-SET remaining_stock = remaining_stock - ?
-WHERE id = ? AND remaining_stock >= ?
+```json
+{
+  "orderId": 1,
+  "userId": 1,
+  "flashSaleId": 10,
+  "quantity": 1,
+  "totalPrice": 499.0,
+  "remainingStock": 99,
+  "createdAt": "2026-10-10T15:05:00"
+}
 ```
 
-If there is not enough stock, the update affects zero rows and the purchase fails. :contentReference[oaicite:4]{index=4}
+The `userId` is derived from the JWT, preventing clients from impersonating another user by submitting a different ID.
 
 ---
 
-## 🏗️ Architecture
+## Concurrency Proof
 
-```text
-┌──────────────────────────────────────┐
-│       Spring Boot REST API           │
-│                                      │
-│  /api/health                         │
-│  /api/flash-sales                    │
-│  /api/flash-sales/{id}/reserve       │
-└──────────────────┬───────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────┐
-│          Service Layer               │
-│          Business Logic              │
-└──────────────────┬───────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────┐
-│        Repository Layer              │
-│              JDBC                    │
-│                                      │
-│   Atomic Stock Reservation           │
-└──────────────────┬───────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────┐
-│          PostgreSQL                  │
-│                                      │
-│  users │ products │ flash_sales      │
-│  orders                              │
-└──────────────────────────────────────┘
-```
+The project tests concurrency behavior using database operations rather than relying only on mocks.
+
+### Repository-Level Tests
+
+`src/test/java/org/example/flashsale/repository/FlashSaleRepositoryTest.java`
+
+- **100 concurrent threads, stock = 1:** Exactly 1 successful reservation and 99 rejected attempts.
+- **500 concurrent threads, stock = 100:** Exactly 100 successful reservations and 400 rejected attempts.
+
+In both scenarios, stock must never become negative.
+
+### HTTP-Level Tests
+
+`src/test/java/org/example/flashsale/api/FlashSaleConcurrencyHttpTest.java`
+
+- Sends real HTTP POST requests to a running Spring Boot server.
+- Verifies stock limits under concurrent requests.
+
+### Why It Matters
+
+Java's `synchronized` keyword only coordinates threads within a single JVM. Atomic SQL updates coordinate stock changes through the shared database, even when requests reach different backend instances.
 
 ---
 
-## 🛠️ Tech Stack
-
-| Category | Technology |
-|---|---|
-| Language | Java 22 |
-| Framework | Spring Boot 3.3.4 |
-| Build Tool | Maven |
-| Web Server | Embedded Tomcat |
-| Database | PostgreSQL 18 |
-| Database Access | JDBC |
-| Connection Pool | HikariCP |
-| Testing | JUnit 5 |
-| Logging | SLF4J + Logback |
-| JSON | Jackson |
-
-These technologies correspond to the project's current stack. :contentReference[oaicite:5]{index=5}
-
----
-
-## 📁 Project Structure
-
-```text
-flash-sale-demo/
-│
-├── src/
-│   ├── main/
-│   │   ├── java/org/example/flashsale/
-│   │   │   ├── FlashSaleApplication.java
-│   │   │   ├── api/
-│   │   │   │   └── HealthController.java
-│   │   │   ├── model/
-│   │   │   │   ├── User.java
-│   │   │   │   ├── Product.java
-│   │   │   │   ├── FlashSale.java
-│   │   │   │   ├── FlashSaleStatus.java
-│   │   │   │   ├── Order.java
-│   │   │   │   └── OrderStatus.java
-│   │   │   ├── repository/
-│   │   │   │   ├── Database.java
-│   │   │   │   ├── FlashSaleRepository.java
-│   │   │   │   └── ProductRepository.java
-│   │   │   ├── service/
-│   │   │   │   └── FlashSaleService.java
-│   │   │   └── exception/
-│   │   │       ├── SoldOutException.java
-│   │   │       └── SaleNotActiveException.java
-│   │   └── resources/
-│   │       └── application.properties
-│   │
-│   └── test/
-│       └── java/org/example/flashsale/
-│           └── repository/
-│               └── FlashSaleRepositoryTest.java
-│
-├── docs/
-│   └── screenshots/
-├── pom.xml
-└── README.md
-```
-
-The repository and service layers contain the core flash-sale logic, while the concurrency test verifies the stock reservation behavior. :contentReference[oaicite:6]{index=6}
-
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- Java 22 JDK
+- Java 22 (JDK)
 - Maven
-- PostgreSQL 18
+- PostgreSQL 18 running on `localhost:5432`
+- Redis 7, or Memurai on Windows, running on `localhost:6379`
 
-### 1. Create the Database
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/flash-sale-demo.git
+cd flash-sale-demo
+```
+
+Replace `YOUR_USERNAME` with your GitHub username.
+
+### 2. Create the Database
+
+Connect to PostgreSQL and run:
 
 ```sql
 CREATE DATABASE flashsale;
 ```
 
-### 2. Configure PostgreSQL
+Then execute the [database schema](docs/schema.sql).
 
-Update:
+### 3. Configure Environment Variables
 
-```text
-src/main/resources/application.properties
+Copy the environment template:
+
+```bash
+cp .env.example .env
 ```
 
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/flashsale
-spring.datasource.username=postgres
-spring.datasource.password=YOUR_PASSWORD
+Configure the required values in your environment:
+
+```env
+DB_USERNAME=postgres
+DB_PASSWORD=your-postgres-password
+JWT_SECRET=your-generated-secret
+STRIPE_SECRET_KEY=your-stripe-test-secret-key
+STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
+SENDGRID_API_KEY=your-sendgrid-api-key
 ```
 
-### 3. Run the Application
+Use your actual local configuration and test credentials. Never commit `.env` or real secrets to GitHub.
+
+### 4. Run the Application
+
+Start the application from IntelliJ IDEA or run:
 
 ```bash
 mvn spring-boot:run
 ```
 
-The application runs at:
+Make sure PostgreSQL and Redis are running and that the required environment variables are available to the application.
 
-```text
-http://localhost:8080
-```
-
-### 4. Test the API
+### 5. Verify the Application
 
 ```bash
 curl http://localhost:8080/api/health
 ```
 
-Expected response:
+Example response:
 
 ```json
 {
   "status": "UP",
   "service": "flash-sale",
-  "timestamp": 1728380293195
+  "timestamp": 1728800000000,
+  "redis": "UP"
+}
+```
+
+The response values depend on the application's current state and implementation.
+
+---
+
+## Authentication
+
+Protected endpoints require a JWT.
+
+```http
+Authorization: Bearer <token>
+```
+
+### Authentication Flow
+
+1. `POST /api/auth/register` — Create an account.
+2. `POST /api/auth/login` — Receive a JWT.
+3. Include the token in requests to protected endpoints.
+
+### Security Measures
+
+- Passwords are hashed using BCrypt.
+- JWTs are signed using HMAC-SHA256.
+- User identity is derived from the token, not trusted from the request body.
+- Login errors are generic to help prevent user enumeration.
+
+---
+
+## Redis TTL Reservations
+
+### The Problem
+
+When a buyer reserves stock but never completes payment, the reserved stock must not remain unavailable forever.
+
+### The Solution
+
+1. The buyer reserves stock. PostgreSQL updates the stock count and records the order.
+2. Redis stores a reservation key, `reservation:{orderId}`, with a 10-minute TTL.
+3. A background sweeper checks for expired reservations every 30 seconds.
+4. Expired reservations are marked `EXPIRED`, and their stock is returned to the available pool.
+
+### Debug Endpoint
+
+```http
+GET /api/flash-sales/reservations/{orderId}
+```
+
+Example response:
+
+```json
+{
+  "orderId": 5,
+  "ttlSeconds": 542,
+  "active": true,
+  "reservation": {
+    "orderId": 5,
+    "userId": 1,
+    "flashSaleId": 10,
+    "quantity": 1
+  }
 }
 ```
 
 ---
 
-## 🧪 Concurrency Testing
+## Roadmap
 
-The project includes automated tests that simulate many users purchasing limited stock simultaneously.
+### Backend Core
 
-### Test Scenario 1
+- [x] Phase 1 — Pure Java domain and concurrency tests
+- [x] Phase 2 — PostgreSQL integration and atomic stock reservation
+- [x] Phase 3 — Spring Boot REST API and JdbcTemplate
+- [x] Phase 4 — JWT authentication and protected endpoints
+- [x] Phase 5.1 — Redis integration and health check
+- [x] Phase 5.2 — TTL reservations stored in Redis
+- [ ] Phase 5.3 — Background sweeper for expired reservations
+- [ ] Phase 5.4 — Order confirmation
+- [ ] Phase 5.5 — Order history and integration tests
 
-**100 concurrent users → 1 available item**
+### Infrastructure
 
-Expected result:
+- [ ] Phase 6 — Docker and Docker Compose
+- [ ] Phase 7 — CORS configuration and API improvements
+
+### Frontend
+
+- [ ] Phase 8 — React, Vite, and Tailwind CSS MVP
+- [ ] Phase 9 — UI improvements, animations, and responsive design
+
+### Real Commerce
+
+- [ ] Phase 10 — Stripe integration in test mode with webhooks
+- [ ] Phase 11 — Email reminders before reservation expiry
+
+### Deployment and Quality
+
+- [ ] Phase 12 — Deploy backend and frontend
+- [ ] Phase 13 — CI/CD with GitHub Actions
+- [ ] Phase 14 — Load testing with Gatling
+
+### v2 — Future Improvements
+
+- [ ] Discount codes
+- [ ] Seller analytics dashboard
+- [ ] Product reviews
+- [ ] Real-time stock updates using WebSockets
+
+---
+
+## Project Structure
 
 ```text
-1 successful purchase
-99 sold-out responses
-0 remaining stock
+flash-sale-demo/
+├── docs/
+│   ├── design.md
+│   ├── schema.sql
+│   └── screenshots/
+├── src/
+│   ├── main/
+│   │   ├── java/org/example/flashsale/
+│   │   │   ├── FlashSaleApplication.java
+│   │   │   ├── api/
+│   │   │   ├── config/
+│   │   │   ├── exception/
+│   │   │   ├── model/
+│   │   │   ├── repository/
+│   │   │   ├── security/
+│   │   │   └── service/
+│   │   └── resources/
+│   │       └── application.properties
+│   └── test/
+│       └── java/org/example/flashsale/
+│           ├── api/
+│           ├── config/
+│           └── repository/
+├── .env.example
+├── .gitignore
+├── pom.xml
+├── README.md
+└── LICENSE
 ```
 
-### Test Scenario 2
+---
 
-**500 concurrent users → 100 available items**
+## Contributing
 
-Expected result:
-
-```text
-100 successful purchases
-400 sold-out responses
-0 remaining stock
-```
-
-The tests use `ExecutorService` and `CountDownLatch` to simulate concurrent requests. :contentReference[oaicite:7]{index=7}
+Issues and pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
 
 ---
 
-## 📸 Screenshots
-
-Add screenshots to:
-
-```text
-docs/screenshots/
-```
-
-Recommended screenshots:
-
-- `health-endpoint.png`
-- `startup-log.png`
-- `test-passing.png`
-
----
-
-## 🗺️ Future Improvements
-
-- JWT authentication
-- User roles
-- Complete flash-sale REST endpoints
-- Redis stock reservations with TTL
-- RabbitMQ order processing
-- Docker containerization
-- CI/CD pipeline
-- Cloud deployment
-- Load testing with Gatling
-
----
-
-## 🎓 Key Learning Outcomes
-
-This project demonstrates several important backend concepts:
-
-- Race conditions
-- Database-level concurrency control
-- Atomic SQL operations
-- Why `synchronized` does not scale across multiple servers
-- Layered backend architecture
-- Automated concurrency testing
-- Defense-in-depth database design
-
-The concurrency tests provide measurable evidence that the system can prevent overselling under concurrent load. :contentReference[oaicite:8]{index=8}
-
----
-
-## 📜 License
-
-MIT License
-
----
-
-## 👤 Author
-
-**Your Name**
-
-Built as a backend learning project focused on **Java, Spring Boot, PostgreSQL, and concurrent system design**.
