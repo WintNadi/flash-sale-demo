@@ -1,9 +1,11 @@
 package org.example.flashsale.api;
 
 import org.example.flashsale.api.dto.ErrorResponse;
+import org.example.flashsale.exception.BadCredentialsException;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,12 +16,6 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNotFound(IllegalArgumentException e) {
-        return new ErrorResponse("NOT_FOUND", e.getMessage(), LocalDateTime.now());
-    }
 
     @ExceptionHandler(SoldOutException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -33,6 +29,12 @@ public class GlobalExceptionHandler {
         return new ErrorResponse("SALE_NOT_ACTIVE", e.getMessage(), LocalDateTime.now());
     }
 
+    @ExceptionHandler(BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ErrorResponse handleBadCredentials(BadCredentialsException e) {
+        return new ErrorResponse("BAD_CREDENTIALS", e.getMessage(), LocalDateTime.now());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleValidation(MethodArgumentNotValidException e) {
@@ -40,6 +42,20 @@ public class GlobalExceptionHandler {
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return new ErrorResponse("VALIDATION_ERROR", message, LocalDateTime.now());
+    }
+
+    /** Used for "email already registered", business-rule violations, etc. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleBadRequest(IllegalArgumentException e) {
+        return new ErrorResponse("BAD_REQUEST", e.getMessage(), LocalDateTime.now());
+    }
+
+    /** Returns 405 when a client uses the wrong HTTP method (e.g., GET on a POST endpoint) */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    public ErrorResponse handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
+        return new ErrorResponse("METHOD_NOT_ALLOWED", e.getMessage(), LocalDateTime.now());
     }
 
     @ExceptionHandler(Exception.class)

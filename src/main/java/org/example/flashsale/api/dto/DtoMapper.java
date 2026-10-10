@@ -2,6 +2,7 @@ package org.example.flashsale.api.dto;
 
 import org.example.flashsale.model.FlashSale;
 import org.example.flashsale.model.Product;
+import org.example.flashsale.model.User;
 
 public class DtoMapper {
 
@@ -20,10 +21,14 @@ public class DtoMapper {
                 fs.getTotalStock(),
                 fs.getRemainingStock(),
                 sale,
-                Math.round(discount * 100.0) / 100.0,   // round to 2 decimals
+                Math.round(discount * 100.0) / 100.0,
                 fs.getStartsAt(),
                 fs.getEndsAt(),
                 fs.getStatus().name()
         );
+    }
+
+    public static UserDto toDto(User u) {
+        return new UserDto(u.getId(), u.getEmail(), u.getCreatedAt());
     }
 }
