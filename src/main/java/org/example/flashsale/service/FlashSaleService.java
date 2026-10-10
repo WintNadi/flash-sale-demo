@@ -5,20 +5,21 @@ import org.example.flashsale.exception.SoldOutException;
 import org.example.flashsale.model.FlashSale;
 import org.example.flashsale.model.Order;
 import org.example.flashsale.repository.FlashSaleRepository;
+import org.example.flashsale.repository.OrderRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class FlashSaleService {
 
     private final FlashSaleRepository saleRepo;
-    private final AtomicLong orderIdGenerator = new AtomicLong(1);
+    private final OrderRepository orderRepo;
 
-    public FlashSaleService(FlashSaleRepository saleRepo) {
+    public FlashSaleService(FlashSaleRepository saleRepo, OrderRepository orderRepo) {
         this.saleRepo = saleRepo;
+        this.orderRepo = orderRepo;
     }
 
     public FlashSale getSale(long id) {
@@ -30,9 +31,12 @@ public class FlashSaleService {
         return saleRepo.findAll();
     }
 
+    public List<Order> getOrdersForUser(long userId) {
+        return orderRepo.findByUserId(userId);
+    }
+
     /**
-     * Reserve stock for a user.
-     * Order persistence is a placeholder (in-memory ID) until Phase 5.
+     * Reserve stock AND persist the order.
      */
     public Order reserve(long userId, long flashSaleId, int quantity) {
         FlashSale sale = getSale(flashSaleId);
@@ -50,8 +54,10 @@ public class FlashSaleService {
             throw new SoldOutException("Not enough stock");
         }
 
-        long orderId = orderIdGenerator.getAndIncrement();
-        return new Order(orderId, userId, flashSaleId, quantity,
-                quantity * sale.getSalePrice(), now);
+        double totalPrice = quantity * sale.getSalePrice();
+        long orderId = orderRepo.insert(userId, flashSaleId, quantity, totalPrice);
+
+        return orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalStateException("Order not found after insert"));
     }
 }

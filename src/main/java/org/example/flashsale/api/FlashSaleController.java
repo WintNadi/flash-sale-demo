@@ -4,8 +4,10 @@ import jakarta.validation.Valid;
 import org.example.flashsale.api.dto.*;
 import org.example.flashsale.model.FlashSale;
 import org.example.flashsale.model.Order;
+import org.example.flashsale.security.UserPrincipal;
 import org.example.flashsale.service.FlashSaleService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,8 +37,12 @@ public class FlashSaleController {
     @PostMapping("/{id}/reserve")
     @ResponseStatus(HttpStatus.CREATED)
     public ReserveResponse reserve(@PathVariable long id,
-                                   @Valid @RequestBody ReserveRequest request) {
-        Order order = flashSaleService.reserve(request.userId(), id, request.quantity());
+                                   @Valid @RequestBody ReserveRequest request,
+                                   @AuthenticationPrincipal UserPrincipal principal) {
+        // 👇 This is the key change — userId comes from the verified token, not the request body
+        long userId = principal.getUserId();
+
+        Order order = flashSaleService.reserve(userId, id, request.quantity());
         FlashSale after = flashSaleService.getSale(id);
 
         return new ReserveResponse(

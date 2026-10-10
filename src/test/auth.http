@@ -1,0 +1,8 @@
+### 6. Reserve WITH token
+POST http://localhost:8080/api/flash-sales/11/reserve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quantity": 1
+}
