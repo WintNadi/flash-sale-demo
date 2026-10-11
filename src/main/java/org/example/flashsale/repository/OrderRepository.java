@@ -78,4 +78,9 @@ public class OrderRepository {
                 rs.getTimestamp("created_at").toLocalDateTime()
         ), userId);
     }
+
+    public void updateStatus(long orderId, String status) {
+        String sql = "UPDATE orders SET status = ? WHERE id = ?";
+        jdbc.update(sql, status, orderId);
+    }
 }

@@ -118,4 +118,18 @@ public class FlashSaleRepository {
         fs.setStatus(FlashSaleStatus.valueOf(rs.getString("status")));
         return fs;
     };
+
+    /** Return stock to a flash sale (used when a reservation expires or is cancelled). */
+    public void release(long flashSaleId, int quantity) {
+        String sql = """
+        UPDATE flash_sales
+        SET remaining_stock = remaining_stock + ?,
+            status = CASE
+                WHEN status = 'SOLD_OUT' THEN 'ACTIVE'
+                ELSE status
+            END
+        WHERE id = ?
+        """;
+        jdbc.update(sql, quantity, flashSaleId);
+    }
 }

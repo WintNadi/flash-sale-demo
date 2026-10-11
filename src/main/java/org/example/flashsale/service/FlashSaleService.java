@@ -1,5 +1,6 @@
 package org.example.flashsale.service;
 
+import org.example.flashsale.api.dto.ReservationDto;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
 import org.example.flashsale.model.FlashSale;
@@ -16,10 +17,14 @@ public class FlashSaleService {
 
     private final FlashSaleRepository saleRepo;
     private final OrderRepository orderRepo;
+    private final ReservationService reservationService;
 
-    public FlashSaleService(FlashSaleRepository saleRepo, OrderRepository orderRepo) {
+    public FlashSaleService(FlashSaleRepository saleRepo,
+                            OrderRepository orderRepo,
+                            ReservationService reservationService) {
         this.saleRepo = saleRepo;
         this.orderRepo = orderRepo;
+        this.reservationService = reservationService;
     }
 
     public FlashSale getSale(long id) {
@@ -35,9 +40,6 @@ public class FlashSaleService {
         return orderRepo.findByUserId(userId);
     }
 
-    /**
-     * Reserve stock AND persist the order.
-     */
     public Order reserve(long userId, long flashSaleId, int quantity) {
         FlashSale sale = getSale(flashSaleId);
 
@@ -57,7 +59,18 @@ public class FlashSaleService {
         double totalPrice = quantity * sale.getSalePrice();
         long orderId = orderRepo.insert(userId, flashSaleId, quantity, totalPrice);
 
-        return orderRepo.findById(orderId)
+        Order order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new IllegalStateException("Order not found after insert"));
+
+        // Store the reservation in Redis with a TTL
+        reservationService.hold(new ReservationDto(
+                order.getId(),
+                order.getUserId(),
+                order.getFlashSaleId(),
+                order.getQuantity(),
+                order.getCreatedAt()
+        ));
+
+        return order;
     }
 }
