@@ -12,14 +12,14 @@ public class Order {
     private OrderStatus status;
 
     public Order(Long id, Long userId, Long flashSaleId, int quantity,
-                 double totalPrice, LocalDateTime createdAt) {
+                 double totalPrice, LocalDateTime createdAt, OrderStatus status) {
         this.id = id;
         this.userId = userId;
         this.flashSaleId = flashSaleId;
         this.quantity = quantity;
         this.totalPrice = totalPrice;
         this.createdAt = createdAt;
-        this.status = OrderStatus.RESERVED;
+        this.status = status != null ? status : OrderStatus.RESERVED;
     }
 
     public Long getId() { return id; }

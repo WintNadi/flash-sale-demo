@@ -29,7 +29,7 @@ Content-Type: application/json
 GET http://localhost:8080/api/flash-sales
 
 ### 5. Reserve WITHOUT token (should be 403)
-POST http://localhost:8080/api/flash-sales/12/reserve
+POST http://localhost:8080/api/flash-sales/13reserve
 Content-Type: application/json
 
 {
@@ -37,10 +37,30 @@ Content-Type: application/json
 }
 
 ### 6. Reserve WITH token (should be 201)
-POST http://localhost:8080/api/flash-sales/12/reserve
+POST http://localhost:8080/api/flash-sales/13/reserve
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "quantity": 1
 }
+
+> {%
+    client.global.set("orderId", response.body.orderId);
+    client.log("Order ID captured: " + response.body.orderId);
+%}
+
+### 8. Confirm order (success)
+POST http://localhost:8080/api/orders/{{orderId}}/confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 9. Confirm same order again (should be 400 - not RESERVED)
+POST http://localhost:8080/api/orders/{{orderId}}/confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 10. Confirm someone else's order (should be 400)
+POST http://localhost:8080/api/orders/99999/confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json

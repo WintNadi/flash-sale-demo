@@ -47,40 +47,49 @@ public class OrderRepository {
 
     public Optional<Order> findById(long id) {
         String sql = """
-            SELECT id, user_id, flash_sale_id, quantity, total_price, status, created_at
-            FROM orders
-            WHERE id = ?
-            """;
+        SELECT id, user_id, flash_sale_id, quantity, total_price, status, created_at
+        FROM orders
+        WHERE id = ?
+        """;
         List<Order> results = jdbc.query(sql, (rs, rowNum) -> new Order(
                 rs.getLong("id"),
                 rs.getLong("user_id"),
                 rs.getLong("flash_sale_id"),
                 rs.getInt("quantity"),
                 rs.getDouble("total_price"),
-                rs.getTimestamp("created_at").toLocalDateTime()
+                rs.getTimestamp("created_at").toLocalDateTime(),
+                OrderStatus.valueOf(rs.getString("status"))   // ← ADDED
         ), id);
         return results.stream().findFirst();
     }
 
     public List<Order> findByUserId(long userId) {
         String sql = """
-            SELECT id, user_id, flash_sale_id, quantity, total_price, status, created_at
-            FROM orders
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-            """;
+        SELECT id, user_id, flash_sale_id, quantity, total_price, status, created_at
+        FROM orders
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        """;
         return jdbc.query(sql, (rs, rowNum) -> new Order(
                 rs.getLong("id"),
                 rs.getLong("user_id"),
                 rs.getLong("flash_sale_id"),
                 rs.getInt("quantity"),
                 rs.getDouble("total_price"),
-                rs.getTimestamp("created_at").toLocalDateTime()
+                rs.getTimestamp("created_at").toLocalDateTime(),
+                OrderStatus.valueOf(rs.getString("status"))   // ← ADDED
         ), userId);
     }
 
     public void updateStatus(long orderId, String status) {
         String sql = "UPDATE orders SET status = ? WHERE id = ?";
         jdbc.update(sql, status, orderId);
+    }
+
+    /** Fetch orders belonging to a specific user (for authorization checks). */
+    public boolean belongsToUser(long orderId, long userId) {
+        String sql = "SELECT COUNT(*) FROM orders WHERE id = ? AND user_id = ?";
+        Integer count = jdbc.queryForObject(sql, Integer.class, orderId, userId);
+        return count != null && count > 0;
     }
 }

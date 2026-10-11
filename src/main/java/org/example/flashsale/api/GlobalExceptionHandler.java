@@ -63,4 +63,10 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleGeneric(Exception e) {
         return new ErrorResponse("INTERNAL_ERROR", e.getMessage(), LocalDateTime.now());
     }
+
+    @ExceptionHandler(org.example.flashsale.exception.ReservationExpiredException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleReservationExpired(org.example.flashsale.exception.ReservationExpiredException e) {
+        return new ErrorResponse("RESERVATION_EXPIRED", e.getMessage(), LocalDateTime.now());
+    }
 }

@@ -1,6 +1,7 @@
 package org.example.flashsale.service;
 
 import org.example.flashsale.api.dto.ReservationDto;
+import org.example.flashsale.exception.ReservationExpiredException;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
 import org.example.flashsale.model.FlashSale;
@@ -72,5 +73,35 @@ public class FlashSaleService {
         ));
 
         return order;
+    }
+
+    /**
+     * Confirm a reservation.
+     * Only the owner of the order can confirm it.
+     * The order must currently be RESERVED and the Redis reservation must still exist.
+     */
+    public Order confirmOrder(long userId, long orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        if (order.getUserId() != userId) {
+            throw new IllegalArgumentException("Order not found: " + orderId);
+        }
+
+        if (!"RESERVED".equals(order.getStatus().name())) {
+            throw new IllegalArgumentException("Order is not in RESERVED state");
+        }
+
+        // Reservation must still be active in Redis
+        if (reservationService.find(orderId).isEmpty()) {
+            throw new ReservationExpiredException("Reservation has expired");
+        }
+
+        // Move to CONFIRMED and release the Redis hold
+        orderRepo.updateStatus(orderId, "CONFIRMED");
+        reservationService.release(orderId);
+
+        return orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalStateException("Order not found after confirm"));
     }
 }
