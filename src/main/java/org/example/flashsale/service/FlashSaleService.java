@@ -19,13 +19,17 @@ public class FlashSaleService {
     private final FlashSaleRepository saleRepo;
     private final OrderRepository orderRepo;
     private final ReservationService reservationService;
+    private final StripeService stripeService;
 
+    // Update the constructor signature:
     public FlashSaleService(FlashSaleRepository saleRepo,
                             OrderRepository orderRepo,
-                            ReservationService reservationService) {
+                            ReservationService reservationService,
+                            StripeService stripeService) {
         this.saleRepo = saleRepo;
         this.orderRepo = orderRepo;
         this.reservationService = reservationService;
+        this.stripeService = stripeService;
     }
 
     public FlashSale getSale(long id) {
@@ -103,5 +107,55 @@ public class FlashSaleService {
 
         return orderRepo.findById(orderId)
                 .orElseThrow(() -> new IllegalStateException("Order not found after confirm"));
+    }
+
+    /**
+     * Initiate payment for an order.
+     * Returns the Stripe client_secret.
+     * Only the owner can pay, and only if the order is RESERVED and not expired.
+     */
+    public String initiatePayment(long userId, long orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        if (order.getUserId() != userId) {
+            throw new IllegalArgumentException("Order not found: " + orderId);
+        }
+
+        if (!"RESERVED".equals(order.getStatus().name())) {
+            throw new IllegalArgumentException("Order is not in RESERVED state");
+        }
+
+        if (reservationService.find(orderId).isEmpty()) {
+            throw new ReservationExpiredException("Reservation has expired");
+        }
+
+        try {
+            return stripeService.createPaymentIntent(order);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create payment intent: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Confirm an order after successful payment.
+     * Called by the webhook handler.
+     * Idempotent: if already CONFIRMED, does nothing.
+     */
+    public void markOrderAsPaid(long orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        if ("CONFIRMED".equals(order.getStatus().name())) {
+            return; // already confirmed — safe to ignore
+        }
+
+        if (!"RESERVED".equals(order.getStatus().name())) {
+            // Order was expired or cancelled. In production, trigger a refund here.
+            throw new IllegalStateException("Cannot confirm order in state: " + order.getStatus());
+        }
+
+        orderRepo.updateStatus(orderId, "CONFIRMED");
+        reservationService.release(orderId);
     }
 }

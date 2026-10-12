@@ -39,6 +39,8 @@ public class SecurityConfig {
                         // Public read-only endpoints
                         .requestMatchers(HttpMethod.GET, "/api/flash-sales", "/api/flash-sales/**").permitAll()
 
+                        .requestMatchers("/api/webhooks/**").permitAll()
+
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )

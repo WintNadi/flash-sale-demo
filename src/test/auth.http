@@ -37,7 +37,7 @@ Content-Type: application/json
 }
 
 ### 6. Reserve WITH token (should be 201)
-POST http://localhost:8080/api/flash-sales/13/reserve
+POST http://localhost:8080/api/flash-sales/14/reserve
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -64,3 +64,13 @@ Content-Type: application/json
 POST http://localhost:8080/api/orders/99999/confirm
 Authorization: Bearer {{token}}
 Content-Type: application/json
+
+### 11. Initiate payment for the reserved order
+POST http://localhost:8080/api/orders/{{orderId}}/pay
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+> {%
+    client.global.set("clientSecret", response.body.clientSecret);
+    client.log("Client secret: " + response.body.clientSecret);
+%}
