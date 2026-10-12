@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: flashsale-postgres
+    environment:
+      POSTGRES_DB: flashsale
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgreswint
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./docs/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: flashsale-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flashsale-app
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgreswint
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/flashsale
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    ports:
+      - "8081:8080"
+
+volumes:
+  postgres-data:
+  redis-data:
