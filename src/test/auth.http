@@ -83,3 +83,10 @@ Authorization: Bearer {{token}}
 POST http://localhost:8081/api/orders/{{orderId}}/cancel
 Authorization: Bearer {{token}}
 Content-Type: application/json
+
+### 14. Get current user (with token)
+GET http://localhost:8081/api/auth/me
+Authorization: Bearer {{token}}
+
+### 15. Get current user (without token) — should be 401
+GET http://localhost:8081/api/auth/me

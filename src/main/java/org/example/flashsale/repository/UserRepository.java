@@ -63,4 +63,5 @@ public class UserRepository {
             rs.getString("password_hash"),
             rs.getTimestamp("created_at").toLocalDateTime()
     );
+
 }

@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import org.example.flashsale.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -37,5 +39,12 @@ public class AuthController {
                 .plusNanos(jwtService.getExpirationMs() * 1_000_000L);
 
         return new LoginResponse(token, expiresAt, DtoMapper.toDto(user));
+    }
+
+    @GetMapping("/me")
+    public UserDto me(@AuthenticationPrincipal UserPrincipal principal) {
+        // principal is set by JwtAuthFilter on authenticated requests
+        User user = authService.getUserById(principal.getUserId());
+        return DtoMapper.toDto(user);
     }
 }

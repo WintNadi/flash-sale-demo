@@ -50,4 +50,9 @@ public class AuthService {
 
         return user;
     }
+
+    public User getUserById(Long id) {
+        return userRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + id));
+    }
 }
