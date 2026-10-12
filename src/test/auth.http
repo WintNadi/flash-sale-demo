@@ -74,3 +74,12 @@ Content-Type: application/json
     client.global.set("clientSecret", response.body.clientSecret);
     client.log("Client secret: " + response.body.clientSecret);
 %}
+
+### 12. Get my orders
+GET http://localhost:8080/api/orders/me
+Authorization: Bearer {{token}}
+
+### 13. Cancel reservation
+POST http://localhost:8080/api/orders/{{orderId}}/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json

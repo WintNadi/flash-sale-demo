@@ -7,6 +7,7 @@ import org.example.flashsale.security.UserPrincipal;
 import org.example.flashsale.service.FlashSaleService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -42,5 +43,20 @@ public class OrderController {
                 order.getStatus().name(),
                 order.getCreatedAt()
         );
+    }
+
+    @GetMapping("/me")
+    public List<OrderDto> getMyOrders(@AuthenticationPrincipal UserPrincipal principal) {
+        return flashSaleService.getOrdersForUser(principal.getUserId())
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public OrderDto cancel(@PathVariable long orderId,
+                           @AuthenticationPrincipal UserPrincipal principal) {
+        Order cancelled = flashSaleService.cancelOrder(principal.getUserId(), orderId);
+        return toDto(cancelled);
     }
 }

@@ -158,4 +158,29 @@ public class FlashSaleService {
         orderRepo.updateStatus(orderId, "CONFIRMED");
         reservationService.release(orderId);
     }
+
+    /**
+     * Cancel a reservation. Only the owner can cancel.
+     * Returns the stock to the pool and deletes the Redis hold.
+     */
+    public Order cancelOrder(long userId, long orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        if (order.getUserId() != userId) {
+            throw new IllegalArgumentException("Order not found: " + orderId);
+        }
+
+        if (!"RESERVED".equals(order.getStatus().name())) {
+            throw new IllegalArgumentException("Only RESERVED orders can be cancelled");
+        }
+
+        // Release stock, remove Redis hold, mark order CANCELLED
+        saleRepo.release(order.getFlashSaleId(), order.getQuantity());
+        reservationService.release(orderId);
+        orderRepo.updateStatus(orderId, "CANCELLED");
+
+        return orderRepo.findById(orderId)
+                .orElseThrow(() -> new IllegalStateException("Order not found after cancel"));
+    }
 }
