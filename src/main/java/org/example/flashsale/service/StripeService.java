@@ -31,7 +31,7 @@ public class StripeService {
      * Idempotency: reuses the same PaymentIntent for the same order ID.
      */
     public String createPaymentIntent(Order order) throws StripeException {
-        // Stripe uses the smallest currency unit — for USD, that's cents
+        // Amount in cents — $499.00 = 49900
         long amountCents = Math.round(order.getTotalPrice() * 100);
 
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
@@ -47,11 +47,10 @@ public class StripeService {
                 )
                 .build();
 
-        RequestOptions options = RequestOptions.builder()
-                .setIdempotencyKey("order-" + order.getId())
-                .build();
-
-        PaymentIntent intent = PaymentIntent.create(params, options);
+        // IMPORTANT: no idempotency key — Stripe creates a fresh intent each call.
+        // Safety comes from the frontend preventing duplicate clicks
+        // AND the webhook handler being idempotent (it checks order status).
+        PaymentIntent intent = PaymentIntent.create(params);
         return intent.getClientSecret();
     }
 

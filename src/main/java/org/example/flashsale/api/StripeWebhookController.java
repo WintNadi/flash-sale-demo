@@ -31,6 +31,8 @@ public class StripeWebhookController {
             @RequestBody String payload,
             @RequestHeader("Stripe-Signature") String signature) {
 
+        log.info("WEBHOOK RECEIVED, payload length={}", payload.length());
+
         Event event;
         try {
             event = Webhook.constructEvent(
@@ -39,23 +41,40 @@ public class StripeWebhookController {
                     stripeService.getWebhookSecret()
             );
         } catch (SignatureVerificationException e) {
-            log.warn("Invalid Stripe webhook signature");
+            log.warn("Invalid Stripe webhook signature: {}", e.getMessage());
             return ResponseEntity.status(400).body("Invalid signature");
+        } catch (Exception e) {
+            log.error("Failed to parse webhook event", e);
+            return ResponseEntity.status(400).body("Invalid payload");
         }
 
-        log.info("Received Stripe webhook: {}", event.getType());
+        String eventType = event.getType();
+        log.info("Received Stripe webhook: {}", eventType);
 
-        if ("payment_intent.succeeded".equals(event.getType())) {
-            handlePaymentSucceeded(event);
+        if ("payment_intent.succeeded".equals(eventType)) {
+            try {
+                handlePaymentSucceeded(event);
+            } catch (Exception e) {
+                log.error("Error handling payment_intent.succeeded: {}", e.getMessage(), e);
+            }
         }
 
         return ResponseEntity.ok("ok");
     }
 
     private void handlePaymentSucceeded(Event event) {
-        PaymentIntent intent = (PaymentIntent) event.getDataObjectDeserializer()
-                .getObject()
-                .orElseThrow(() -> new RuntimeException("No PaymentIntent in event"));
+        var deserializer = event.getDataObjectDeserializer();
+        Object raw = deserializer.getObject().orElse(null);
+
+        if (raw == null) {
+            log.warn("Could not deserialize event object for event type {}", event.getType());
+            return;
+        }
+
+        if (!(raw instanceof PaymentIntent intent)) {
+            log.warn("Event object is not a PaymentIntent: {}", raw.getClass().getName());
+            return;
+        }
 
         String orderIdStr = intent.getMetadata().get("orderId");
         if (orderIdStr == null) {
@@ -66,11 +85,7 @@ public class StripeWebhookController {
         long orderId = Long.parseLong(orderIdStr);
         log.info("Payment succeeded for order {}, intent {}", orderId, intent.getId());
 
-        try {
-            flashSaleService.markOrderAsPaid(orderId);
-            log.info("Order {} marked as CONFIRMED", orderId);
-        } catch (Exception e) {
-            log.error("Failed to mark order {} as paid: {}", orderId, e.getMessage(), e);
-        }
+        flashSaleService.markOrderAsPaid(orderId);
+        log.info("Order {} marked as CONFIRMED", orderId);
     }
 }
