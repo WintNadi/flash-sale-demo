@@ -183,4 +183,8 @@ public class FlashSaleService {
         return orderRepo.findById(orderId)
                 .orElseThrow(() -> new IllegalStateException("Order not found after cancel"));
     }
+
+    public List<OrderRepository.OrderWithProduct> getOrdersWithProductForUser(long userId) {
+        return orderRepo.findByUserIdWithProduct(userId);
+    }
 }

@@ -37,7 +37,7 @@ Content-Type: application/json
 }
 
 ### 6. Reserve WITH token (should be 201)
-POST http://localhost:8081/api/flash-sales/14/reserve
+POST http://localhost:8081/api/flash-sales/1/reserve
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -90,3 +90,7 @@ Authorization: Bearer {{token}}
 
 ### 15. Get current user (without token) — should be 401
 GET http://localhost:8081/api/auth/me
+
+### 16. My orders
+GET http://localhost:8081/api/orders/me
+Authorization: Bearer {{token}}

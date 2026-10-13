@@ -5,8 +5,10 @@ import org.example.flashsale.api.dto.PaymentIntentResponse;
 import org.example.flashsale.model.Order;
 import org.example.flashsale.security.UserPrincipal;
 import org.example.flashsale.service.FlashSaleService;
+import org.example.flashsale.service.ReservationService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -14,16 +16,39 @@ import java.util.List;
 public class OrderController {
 
     private final FlashSaleService flashSaleService;
+    private final ReservationService reservationService;
 
-    public OrderController(FlashSaleService flashSaleService) {
+    public OrderController(FlashSaleService flashSaleService,
+                           ReservationService reservationService) {
         this.flashSaleService = flashSaleService;
+        this.reservationService = reservationService;
+    }
+
+    @GetMapping("/me")
+    public List<OrderDto> getMyOrders(@AuthenticationPrincipal UserPrincipal principal) {
+        return flashSaleService.getOrdersWithProductForUser(principal.getUserId())
+                .stream()
+                .map(o -> new OrderDto(
+                        o.id(), o.userId(), o.flashSaleId(), o.productName(),
+                        o.quantity(), o.totalPrice(), o.status(),
+                        "RESERVED".equals(o.status()) ? reservationService.ttlSeconds(o.id()) : -1L,
+                        o.createdAt()
+                ))
+                .toList();
     }
 
     @PostMapping("/{orderId}/confirm")
     public OrderDto confirm(@PathVariable long orderId,
                             @AuthenticationPrincipal UserPrincipal principal) {
         Order confirmed = flashSaleService.confirmOrder(principal.getUserId(), orderId);
-        return toDto(confirmed);
+        return fromOrder(confirmed);
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public OrderDto cancel(@PathVariable long orderId,
+                           @AuthenticationPrincipal UserPrincipal principal) {
+        Order cancelled = flashSaleService.cancelOrder(principal.getUserId(), orderId);
+        return fromOrder(cancelled);
     }
 
     @PostMapping("/{orderId}/pay")
@@ -33,30 +58,19 @@ public class OrderController {
         return new PaymentIntentResponse(orderId, clientSecret);
     }
 
-    private OrderDto toDto(Order order) {
+    private OrderDto fromOrder(Order o) {
         return new OrderDto(
-                order.getId(),
-                order.getUserId(),
-                order.getFlashSaleId(),
-                order.getQuantity(),
-                order.getTotalPrice(),
-                order.getStatus().name(),
-                order.getCreatedAt()
+                o.getId(),
+                o.getUserId(),
+                o.getFlashSaleId(),
+                "Product #" + o.getFlashSaleId(),
+                o.getQuantity(),
+                o.getTotalPrice(),
+                o.getStatus().name(),
+                "RESERVED".equals(o.getStatus().name())
+                        ? reservationService.ttlSeconds(o.getId())
+                        : -1L,
+                o.getCreatedAt()
         );
-    }
-
-    @GetMapping("/me")
-    public List<OrderDto> getMyOrders(@AuthenticationPrincipal UserPrincipal principal) {
-        return flashSaleService.getOrdersForUser(principal.getUserId())
-                .stream()
-                .map(this::toDto)
-                .toList();
-    }
-
-    @PostMapping("/{orderId}/cancel")
-    public OrderDto cancel(@PathVariable long orderId,
-                           @AuthenticationPrincipal UserPrincipal principal) {
-        Order cancelled = flashSaleService.cancelOrder(principal.getUserId(), orderId);
-        return toDto(cancelled);
     }
 }

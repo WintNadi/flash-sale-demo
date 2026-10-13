@@ -92,4 +92,39 @@ public class OrderRepository {
         Integer count = jdbc.queryForObject(sql, Integer.class, orderId, userId);
         return count != null && count > 0;
     }
+
+    public List<OrderWithProduct> findByUserIdWithProduct(long userId) {
+        String sql = """
+        SELECT o.id, o.user_id, o.flash_sale_id, o.quantity, o.total_price,
+               o.status, o.created_at,
+               p.name AS product_name
+        FROM orders o
+        JOIN flash_sales fs ON o.flash_sale_id = fs.id
+        JOIN products p ON fs.product_id = p.id
+        WHERE o.user_id = ?
+        ORDER BY o.created_at DESC
+        """;
+
+        return jdbc.query(sql, (rs, rowNum) -> new OrderWithProduct(
+                rs.getLong("id"),
+                rs.getLong("user_id"),
+                rs.getLong("flash_sale_id"),
+                rs.getString("product_name"),
+                rs.getInt("quantity"),
+                rs.getDouble("total_price"),
+                rs.getString("status"),
+                rs.getTimestamp("created_at").toLocalDateTime()
+        ), userId);
+    }
+
+    public record OrderWithProduct(
+            long id,
+            long userId,
+            long flashSaleId,
+            String productName,
+            int quantity,
+            double totalPrice,
+            String status,
+            LocalDateTime createdAt
+    ) {}
 }
