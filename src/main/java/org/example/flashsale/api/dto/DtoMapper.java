@@ -7,9 +7,14 @@ import org.example.flashsale.model.User;
 public class DtoMapper {
 
     public static ProductDto toDto(Product p) {
-        return new ProductDto(p.getId(), p.getName(), p.getRegularPrice(), p.getImageUrl());
+        return new ProductDto(
+                p.getId(),
+                p.getSellerId() == null ? 0L : p.getSellerId(),
+                p.getName(),
+                p.getRegularPrice(),
+                p.getImageUrl()
+        );
     }
-
     public static FlashSaleDto toDto(FlashSale fs) {
         double regular = fs.getProduct().getRegularPrice();
         double sale = fs.getSalePrice();

@@ -70,8 +70,8 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "buyer@example.com",
-  "password": "password123"
+  "email": "buyer1@example.com",
+  "password": "password124"
 }
 
 > {%
@@ -98,3 +98,88 @@ Authorization: Bearer {{G_adminToken}}
 ### 15. No token — should be 401
 ### ====================================================
 GET {{baseUrl}}/api/admin/seller-applications
+
+### 30. Seller creates a product
+POST {{baseUrl}}/api/seller/products
+Authorization: Bearer {{G_buyerToken}}
+Content-Type: application/json
+
+{
+  "name": "Vintage Camera",
+  "regularPrice": 299.99,
+  "imageUrl": "https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800"
+}
+
+> {%
+    client.global.set("G_productId", response.body.id);
+    client.log("Product created with id: " + response.body.id);
+%}
+
+
+### 31. Seller views own products
+GET {{baseUrl}}/api/seller/products
+Authorization: Bearer {{G_buyerToken}}
+
+
+### 32. Seller edits own product
+PUT {{baseUrl}}/api/seller/products/{{G_productId}}
+Authorization: Bearer {{G_buyerToken}}
+Content-Type: application/json
+
+{
+  "name": "Vintage Camera (Refurbished)",
+  "regularPrice": 249.99,
+  "imageUrl": "https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800"
+}
+
+
+### 33. Seller views one product
+GET {{baseUrl}}/api/seller/products/{{G_productId}}
+Authorization: Bearer {{G_buyerToken}}
+
+
+### 34. Buyer (not seller) tries to create — should be 403
+# Register a new buyer first, log in, capture as G_buyerOnlyToken
+
+POST {{baseUrl}}/api/seller/products
+Authorization: Bearer {{G_buyerOnlyToken}}
+Content-Type: application/json
+
+{
+  "name": "Hacker Product",
+  "regularPrice": 0.01,
+  "imageUrl": null
+}
+
+
+### 35. Seller deletes own product
+DELETE {{baseUrl}}/api/seller/products/{{G_productId}}
+Authorization: Bearer {{G_buyerToken}}
+
+### ========================================
+### SETUP — Register users
+### ========================================
+
+### 1. Register buyer
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "buyer2@example.com",
+  "password": "password125"
+}
+### ====================================================
+### 13. Re-login buyer (now SELLER)
+### ====================================================
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "buyer2@example.com",
+  "password": "password125"
+}
+
+> {%
+    client.global.set("G_buyerOnlyToken", response.body.token);
+    client.log("Refreshed G_buyerOnlyToken, new role: " + response.body.user.role);
+%}

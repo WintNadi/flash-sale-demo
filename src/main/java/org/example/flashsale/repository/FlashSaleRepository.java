@@ -91,8 +91,8 @@ public class FlashSaleRepository {
         String sql = """
             SELECT fs.id, fs.total_stock, fs.remaining_stock, fs.sale_price,
                    fs.starts_at, fs.ends_at, fs.status,
-                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price,
-                   p.image_url AS p_image_url
+                   p.id AS p_id, p.seller_id AS p_seller_id, p.name AS p_name,
+                   p.regular_price AS p_price, p.image_url AS p_image_url
             FROM flash_sales fs
             JOIN products p ON fs.product_id = p.id
             WHERE fs.id = ?
@@ -106,8 +106,8 @@ public class FlashSaleRepository {
         String sql = """
             SELECT fs.id, fs.total_stock, fs.remaining_stock, fs.sale_price,
                    fs.starts_at, fs.ends_at, fs.status,
-                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price,
-                   p.image_url AS p_image_url
+                   p.id AS p_id, p.seller_id AS p_seller_id, p.name AS p_name,
+                   p.regular_price AS p_price, p.image_url AS p_image_url
             FROM flash_sales fs
             JOIN products p ON fs.product_id = p.id
             ORDER BY fs.id
@@ -122,6 +122,7 @@ public class FlashSaleRepository {
     private static final RowMapper<FlashSale> ROW_MAPPER = (rs, rowNum) -> {
         Product p = new Product(
                 rs.getLong("p_id"),
+                rs.getObject("p_seller_id", Long.class),
                 rs.getString("p_name"),
                 rs.getDouble("p_price"),
                 rs.getString("p_image_url")

@@ -4,6 +4,7 @@ import org.example.flashsale.api.dto.ErrorResponse;
 import org.example.flashsale.exception.BadCredentialsException;
 import org.example.flashsale.exception.SaleNotActiveException;
 import org.example.flashsale.exception.SoldOutException;
+import org.example.flashsale.exception.ForbiddenException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -68,5 +69,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleReservationExpired(org.example.flashsale.exception.ReservationExpiredException e) {
         return new ErrorResponse("RESERVATION_EXPIRED", e.getMessage(), LocalDateTime.now());
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleForbidden(ForbiddenException e) {
+        return new ErrorResponse("FORBIDDEN", e.getMessage(), LocalDateTime.now());
     }
 }
