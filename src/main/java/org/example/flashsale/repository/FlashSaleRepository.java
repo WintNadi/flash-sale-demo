@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,7 +29,6 @@ public class FlashSaleRepository {
 
     /**
      * ⭐ THE ATOMIC RESERVE.
-     * The single SQL statement that prevents overselling.
      */
     public boolean tryReserve(long flashSaleId, int quantity) {
         String sql = """
@@ -42,6 +43,22 @@ public class FlashSaleRepository {
 
         int rowsAffected = jdbc.update(sql, quantity, quantity, flashSaleId, quantity);
         return rowsAffected == 1;
+    }
+
+    /**
+     * Return stock to a flash sale (used when a reservation expires or is cancelled).
+     */
+    public void release(long flashSaleId, int quantity) {
+        String sql = """
+            UPDATE flash_sales
+            SET remaining_stock = remaining_stock + ?,
+                status = CASE
+                    WHEN status = 'SOLD_OUT' THEN 'ACTIVE'
+                    ELSE status
+                END
+            WHERE id = ?
+            """;
+        jdbc.update(sql, quantity, flashSaleId);
     }
 
     public long insert(long productId, int totalStock, double salePrice,
@@ -74,7 +91,8 @@ public class FlashSaleRepository {
         String sql = """
             SELECT fs.id, fs.total_stock, fs.remaining_stock, fs.sale_price,
                    fs.starts_at, fs.ends_at, fs.status,
-                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price
+                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price,
+                   p.image_url AS p_image_url
             FROM flash_sales fs
             JOIN products p ON fs.product_id = p.id
             WHERE fs.id = ?
@@ -88,7 +106,8 @@ public class FlashSaleRepository {
         String sql = """
             SELECT fs.id, fs.total_stock, fs.remaining_stock, fs.sale_price,
                    fs.starts_at, fs.ends_at, fs.status,
-                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price
+                   p.id AS p_id, p.name AS p_name, p.regular_price AS p_price,
+                   p.image_url AS p_image_url
             FROM flash_sales fs
             JOIN products p ON fs.product_id = p.id
             ORDER BY fs.id
@@ -104,7 +123,8 @@ public class FlashSaleRepository {
         Product p = new Product(
                 rs.getLong("p_id"),
                 rs.getString("p_name"),
-                rs.getDouble("p_price")
+                rs.getDouble("p_price"),
+                rs.getString("p_image_url")
         );
         FlashSale fs = new FlashSale(
                 rs.getLong("id"),
@@ -118,18 +138,4 @@ public class FlashSaleRepository {
         fs.setStatus(FlashSaleStatus.valueOf(rs.getString("status")));
         return fs;
     };
-
-    /** Return stock to a flash sale (used when a reservation expires or is cancelled). */
-    public void release(long flashSaleId, int quantity) {
-        String sql = """
-        UPDATE flash_sales
-        SET remaining_stock = remaining_stock + ?,
-            status = CASE
-                WHEN status = 'SOLD_OUT' THEN 'ACTIVE'
-                ELSE status
-            END
-        WHERE id = ?
-        """;
-        jdbc.update(sql, quantity, flashSaleId);
-    }
 }

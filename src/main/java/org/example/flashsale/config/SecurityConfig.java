@@ -1,5 +1,6 @@
 package org.example.flashsale.config;
 
+import org.example.flashsale.security.JsonAccessDeniedHandler;
 import org.example.flashsale.security.JsonAuthEntryPoint;
 import org.example.flashsale.security.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
@@ -25,11 +26,14 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final JsonAuthEntryPoint jsonAuthEntryPoint;
+    private final JsonAccessDeniedHandler jsonAccessDeniedHandler;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
-                          JsonAuthEntryPoint jsonAuthEntryPoint) {
+                          JsonAuthEntryPoint jsonAuthEntryPoint,
+                          JsonAccessDeniedHandler jsonAccessDeniedHandler) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.jsonAuthEntryPoint = jsonAuthEntryPoint;
+        this.jsonAccessDeniedHandler = jsonAccessDeniedHandler;
     }
 
     @Bean
@@ -44,22 +48,18 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/flash-sales", "/api/flash-sales/**").permitAll()
-
-                        // Admin-only — everything under /api/admin/**
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-
-                        // Seller-only — everything under /api/seller/**
                         .requestMatchers("/api/seller/**").hasAnyRole("SELLER", "ADMIN")
-
-                        // Any authenticated user
                         .anyRequest().authenticated()
                 )
-                .exceptionHandling(e -> e.authenticationEntryPoint(jsonAuthEntryPoint))
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint(jsonAuthEntryPoint)
+                        .accessDeniedHandler(jsonAccessDeniedHandler)
+                )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -67,22 +67,22 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
+        CorsConfiguration config = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of(
+        config.setAllowedOrigins(List.of(
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "http://localhost:4173"
         ));
 
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }

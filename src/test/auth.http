@@ -1,24 +1,30 @@
-### ========================================
-### VARIABLES (must be at the top!)
-### ========================================
-@host = http://localhost:8081
+### ====================================================
+### BASE
+### ====================================================
+@baseUrl = http://localhost:8081
 
-### ========================================
-### PUBLIC ENDPOINTS
-### ========================================
 
-### 1. Health check
-GET {{host}}/api/health
+### ====================================================
+### 3. Login maria (admin)
+### ====================================================
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
 
-### 2. List flash sales (public)
-GET {{host}}/api/flash-sales
+{
+  "email": "maria@gmail.com",
+  "password": "12345678"
+}
 
-### ========================================
-### AUTH — Register
-### ========================================
+> {%
+    client.global.set("G_adminToken", response.body.token);
+    client.log("Stored G_adminToken, role: " + response.body.user.role);
+%}
 
-### 3. Register buyer
-POST {{host}}/api/auth/register
+
+### ====================================================
+### 5. Login buyer
+### ====================================================
+POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
@@ -26,81 +32,69 @@ Content-Type: application/json
   "password": "password123"
 }
 
-### ========================================
-### AUTH — Login & capture tokens
-### ========================================
+> {%
+    client.global.set("G_buyerToken", response.body.token);
+    client.log("Stored G_buyerToken, role: " + response.body.user.role);
+%}
 
-### 4. Login as buyer — captures {{buyerToken}}
-POST {{host}}/api/auth/login
+
+### ====================================================
+### 7. Buyer submits seller application
+### ====================================================
+POST {{baseUrl}}/api/seller-applications
+Authorization: Bearer {{G_buyerToken}}
 Content-Type: application/json
 
 {
-  "email":"maria@gmail.com",
-  "password": "12345678"
+  "businessName": "Pixel Paradise",
+  "description": "We sell the finest refurbished Pixel phones with a 1-year warranty and free shipping across Myanmar."
 }
 
 > {%
-    client.global.set("adminToken", response.body.token);
-    client.log("Admin tored");
+    client.global.set("G_applicationId", response.body.id);
+    client.log("Stored G_applicationId: " + response.body.id);
 %}
 
-### ========================================
-### AUTHENTICATED REQUESTS
-### ========================================
 
-### 5. Get current user (buyer token)
-GET {{host}}/api/auth/me
-Authorization: Bearer {{buyerToken}}
+### ====================================================
+### 11. Admin approves the application
+### ====================================================
+POST {{baseUrl}}/api/admin/seller-applications/{{G_applicationId}}/approve
+Authorization: Bearer {{G_adminToken}}
 
-### 6. Get current user — no token (should be 401)
-GET {{host}}/api/auth/me
 
-### ========================================
-### FLASH SALE FLOW
-### ========================================
-
-### 7. Reserve WITHOUT token (should be 401/403)
-POST {{host}}/api/flash-sales/1/reserve
+### ====================================================
+### 13. Re-login buyer (now SELLER)
+### ====================================================
+POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "quantity": 1
-}
-
-### 8. Reserve WITH token (should be 201)
-POST {{host}}/api/flash-sales/1/reserve
-Authorization: Bearer {{buyerToken}}
-Content-Type: application/json
-
-{
-  "quantity": 1
+  "email": "buyer@example.com",
+  "password": "password123"
 }
 
 > {%
-    client.global.set("orderId", response.body.orderId);
-    client.log("Order ID: " + response.body.orderId);
+    client.global.set("G_buyerToken", response.body.token);
+    client.log("Refreshed G_buyerToken, new role: " + response.body.user.role);
 %}
 
-### 9. Get my orders
-GET {{host}}/api/orders/me
-Authorization: Bearer {{buyerToken}}
 
-### 10. Confirm order
-POST {{host}}/api/orders/{{orderId}}/confirm
-Authorization: Bearer {{buyerToken}}
+### ====================================================
+### 17. Seller token, wrong role — should be 403
+### ====================================================
+GET {{baseUrl}}/api/admin/seller-applications
+Authorization: Bearer {{G_buyerToken}}
 
-### 11. Confirm again (should fail — already confirmed)
-POST {{host}}/api/orders/{{orderId}}/confirm
-Authorization: Bearer {{buyerToken}}
 
-### ========================================
-### AUTHORIZATION TESTS
-### ========================================
+### ====================================================
+### 18. Admin token — should be 200
+### ====================================================
+GET {{baseUrl}}/api/admin/seller-applications
+Authorization: Bearer {{G_adminToken}}
 
-### 12. Buyer tries admin path (should be 403)
-GET {{host}}/api/admin/test
-Authorization: Bearer {{buyerToken}}
 
-### 13. Admin tries admin path (needs admin user seeded first)
-GET {{host}}/api/admin/test
-Authorization: Bearer {{adminToken}}
+### ====================================================
+### 15. No token — should be 401
+### ====================================================
+GET {{baseUrl}}/api/admin/seller-applications

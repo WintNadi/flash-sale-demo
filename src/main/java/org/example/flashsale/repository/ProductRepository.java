@@ -17,8 +17,14 @@ public class ProductRepository {
         this.jdbc = jdbc;
     }
 
+    /** Insert without image — used by tests. */
     public long insert(String name, double regularPrice) {
-        String sql = "INSERT INTO products (name, regular_price) VALUES (?, ?)";
+        return insert(name, regularPrice, null);
+    }
+
+    /** Insert with an optional image URL. */
+    public long insert(String name, double regularPrice, String imageUrl) {
+        String sql = "INSERT INTO products (name, regular_price, image_url) VALUES (?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -26,6 +32,7 @@ public class ProductRepository {
             PreparedStatement ps = connection.prepareStatement(sql, new String[]{"id"});
             ps.setString(1, name);
             ps.setBigDecimal(2, BigDecimal.valueOf(regularPrice));
+            ps.setString(3, imageUrl);
             return ps;
         }, keyHolder);
 

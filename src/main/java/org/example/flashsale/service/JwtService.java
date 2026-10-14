@@ -4,8 +4,11 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.example.flashsale.model.Role;
 import org.example.flashsale.model.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,8 @@ import java.util.Optional;
 @Service
 public class JwtService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+
     private final SecretKey key;
     private final long expirationMs;
 
@@ -24,14 +29,12 @@ public class JwtService {
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration-ms}") long expirationMs
     ) {
+        log.info("JwtService initializing. Secret length = {} chars, expiration = {} ms",
+                secret == null ? "null" : secret.length(), expirationMs);
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
 
-    /**
-     * Generate a signed token for a user.
-     * Includes the user's role as a claim.
-     */
     public String generate(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
@@ -39,23 +42,17 @@ public class JwtService {
         return Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("email", user.getEmail())
-                .claim("role", user.getRole().name())   // ← role in the token
+                .claim("role", user.getRole().name())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)
                 .compact();
     }
 
-    /**
-     * Extract the user id from a valid token.
-     */
     public Optional<Long> extractUserId(String token) {
         return extractClaims(token).map(claims -> Long.parseLong(claims.getSubject()));
     }
 
-    /**
-     * Extract the role from a valid token.
-     */
     public Optional<Role> extractRole(String token) {
         return extractClaims(token).map(claims -> {
             String role = claims.get("role", String.class);
@@ -63,14 +60,12 @@ public class JwtService {
         });
     }
 
-    /**
-     * Extract the email from a valid token.
-     */
     public Optional<String> extractEmail(String token) {
         return extractClaims(token).map(claims -> claims.get("email", String.class));
     }
 
-    private Optional<Claims> extractClaims(String token) {
+    /** Public for debug purposes. */
+    public Optional<Claims> extractClaims(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)
