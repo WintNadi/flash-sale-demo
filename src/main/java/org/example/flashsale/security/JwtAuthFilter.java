@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.example.flashsale.model.Role;
 import org.example.flashsale.service.JwtService;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,16 +38,27 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             String token = header.substring(BEARER_PREFIX.length()).trim();
-            Optional<Long> userId = jwtService.extractUserId(token);
 
-            if (userId.isPresent() && SecurityContextHolder.getContext().getAuthentication() == null) {
-                // We only have the userId from the token. That's enough for now.
-                UserPrincipal principal = new UserPrincipal(userId.get(), null);
+            Optional<Long> userId = jwtService.extractUserId(token);
+            Optional<Role> role = jwtService.extractRole(token);
+            Optional<String> email = jwtService.extractEmail(token);
+
+            if (userId.isPresent() && role.isPresent() &&
+                    SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                UserPrincipal principal = new UserPrincipal(
+                        userId.get(),
+                        email.orElse(null),
+                        role.get()
+                );
+
+                // Spring Security expects authorities with "ROLE_" prefix
+                var authority = new SimpleGrantedAuthority("ROLE_" + role.get().name());
 
                 var auth = new UsernamePasswordAuthenticationToken(
                         principal,
-                        null,                                          // no credentials needed
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                        null,
+                        List.of(authority)
                 );
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 

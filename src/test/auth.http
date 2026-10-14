@@ -1,44 +1,75 @@
-### 1. Health check
-GET http://localhost:8081/api/health
+### ========================================
+### VARIABLES (must be at the top!)
+### ========================================
+@host = http://localhost:8081
 
-### 2. Register alice
-POST http://localhost:8081/api/auth/register
+### ========================================
+### PUBLIC ENDPOINTS
+### ========================================
+
+### 1. Health check
+GET {{host}}/api/health
+
+### 2. List flash sales (public)
+GET {{host}}/api/flash-sales
+
+### ========================================
+### AUTH — Register
+### ========================================
+
+### 3. Register buyer
+POST {{host}}/api/auth/register
 Content-Type: application/json
 
 {
-  "email": "alice@example.com",
-  "password": "hunter2pass"
+  "email": "buyer@example.com",
+  "password": "password123"
 }
 
-### 3. Login alice — capture token
-# @name login
-POST http://localhost:8081/api/auth/login
+### ========================================
+### AUTH — Login & capture tokens
+### ========================================
+
+### 4. Login as buyer — captures {{buyerToken}}
+POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "alice@example.com",
-  "password": "hunter2pass"
+  "email":"maria@gmail.com",
+  "password": "12345678"
 }
 
 > {%
-    client.global.set("token", response.body.token);
-    client.log("Token captured: " + response.body.token.substring(0, 30) + "...");
+    client.global.set("adminToken", response.body.token);
+    client.log("Admin tored");
 %}
 
-### 4. List flash sales
-GET http://localhost:8081/api/flash-sales
+### ========================================
+### AUTHENTICATED REQUESTS
+### ========================================
 
-### 5. Reserve WITHOUT token (should be 403)
-POST http://localhost:8081/api/flash-sales/13reserve
+### 5. Get current user (buyer token)
+GET {{host}}/api/auth/me
+Authorization: Bearer {{buyerToken}}
+
+### 6. Get current user — no token (should be 401)
+GET {{host}}/api/auth/me
+
+### ========================================
+### FLASH SALE FLOW
+### ========================================
+
+### 7. Reserve WITHOUT token (should be 401/403)
+POST {{host}}/api/flash-sales/1/reserve
 Content-Type: application/json
 
 {
   "quantity": 1
 }
 
-### 6. Reserve WITH token (should be 201)
-POST http://localhost:8081/api/flash-sales/1/reserve
-Authorization: Bearer {{token}}
+### 8. Reserve WITH token (should be 201)
+POST {{host}}/api/flash-sales/1/reserve
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
@@ -47,50 +78,29 @@ Content-Type: application/json
 
 > {%
     client.global.set("orderId", response.body.orderId);
-    client.log("Order ID captured: " + response.body.orderId);
+    client.log("Order ID: " + response.body.orderId);
 %}
 
-### 8. Confirm order (success)
-POST http://localhost:8081/api/orders/{{orderId}}/confirm
-Authorization: Bearer {{token}}
-Content-Type: application/json
+### 9. Get my orders
+GET {{host}}/api/orders/me
+Authorization: Bearer {{buyerToken}}
 
-### 9. Confirm same order again (should be 400 - not RESERVED)
-POST http://localhost:8081/api/orders/{{orderId}}/confirm
-Authorization: Bearer {{token}}
-Content-Type: application/json
+### 10. Confirm order
+POST {{host}}/api/orders/{{orderId}}/confirm
+Authorization: Bearer {{buyerToken}}
 
-### 10. Confirm someone else's order (should be 400)
-POST http://localhost:8081/api/orders/99999/confirm
-Authorization: Bearer {{token}}
-Content-Type: application/json
+### 11. Confirm again (should fail — already confirmed)
+POST {{host}}/api/orders/{{orderId}}/confirm
+Authorization: Bearer {{buyerToken}}
 
-### 11. Initiate payment for the reserved order
-POST http://localhost:8081/api/orders/{{orderId}}/pay
-Authorization: Bearer {{token}}
-Content-Type: application/json
+### ========================================
+### AUTHORIZATION TESTS
+### ========================================
 
-> {%
-    client.global.set("clientSecret", response.body.clientSecret);
-    client.log("Client secret: " + response.body.clientSecret);
-%}
+### 12. Buyer tries admin path (should be 403)
+GET {{host}}/api/admin/test
+Authorization: Bearer {{buyerToken}}
 
-### 12. Get my orders
-GET http://localhost:8081/api/orders/me
-Authorization: Bearer {{token}}
-
-### 13. Cancel reservation
-POST http://localhost:8081/api/orders/{{orderId}}/cancel
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-### 14. Get current user (with token)
-GET http://localhost:8081/api/auth/me
-Authorization: Bearer {{token}}
-
-### 15. Get current user (without token) — should be 401
-GET http://localhost:8081/api/auth/me
-
-### 16. My orders
-GET http://localhost:8081/api/orders/me
-Authorization: Bearer {{token}}
+### 13. Admin tries admin path (needs admin user seeded first)
+GET {{host}}/api/admin/test
+Authorization: Bearer {{adminToken}}

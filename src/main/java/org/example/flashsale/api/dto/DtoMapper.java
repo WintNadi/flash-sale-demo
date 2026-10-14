@@ -29,6 +29,11 @@ public class DtoMapper {
     }
 
     public static UserDto toDto(User u) {
-        return new UserDto(u.getId(), u.getEmail(), u.getCreatedAt());
+        return new UserDto(
+                u.getId(),
+                u.getEmail(),
+                u.getRole().name(),
+                u.getCreatedAt()
+        );
     }
 }
